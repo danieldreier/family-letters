@@ -94,12 +94,14 @@ def display_images(scan_paths_str):
         st.error(f"Error loading images: {e}")
 
 @timer_decorator
-def fetch_letters(conn, query, params):
+def fetch_letters(query, params):
     """Fetch letters from database with timing"""
     start_time = time.time()
+    conn = get_db_connection()
     df = pd.read_sql_query(query, conn, params=params)
     query_time = time.time() - start_time
     log_timing(f"SQL Query took {query_time:.2f} seconds, returned {len(df)} rows")
+    conn.close()
     return df
 
 @timer_decorator
@@ -119,66 +121,56 @@ def main():
     min_date = datetime.strptime(date_range['min_date'], '%Y-%m-%d')
     max_date = datetime.strptime(date_range['max_date'], '%Y-%m-%d')
     
-    # Date range filter with database min/max dates
+    # Add search field
+    search_query = st.sidebar.text_input("Search letters", key="search_input")
+
+    # Date range selection
+    col1, col2 = st.sidebar.columns(2)
+    with col1:
+        start_date = st.sidebar.date_input("Start Date", min_value=min_date, max_value=max_date, value=min_date)
+    with col2:
+        end_date = st.sidebar.date_input("End Date", min_value=min_date, max_value=max_date, value=max_date)
+
     try:
-        start_date = st.sidebar.date_input(
-            "Start Date",
-            value=min_date,
-            min_value=min_date,
-            max_value=max_date,
-            key="start_date"
-        )
-        
-        end_date = st.sidebar.date_input(
-            "End Date",
-            value=max_date,
-            min_value=min_date,
-            max_value=max_date,
-            key="end_date"
-        )
-            
-        # Ensure start_date is not after end_date
+        # Validate date range
         if start_date > end_date:
             st.sidebar.error("Start date must be before end date")
-            date_min = min_date
-            date_max = max_date
-        else:
-            date_min = start_date
-            date_max = end_date
-            
-    except Exception as e:
-        st.sidebar.error(f"Date selection error: {e}")
-        date_min = min_date
-        date_max = max_date
-    
-    # Text search
-    search_query = st.sidebar.text_input("Search in letters:", "")
-    
-    try:
-        # Build query based on filters
+            return
+
+        # Modify query to include search
         query = """
-        SELECT * FROM letters 
-        WHERE strftime('%Y-%m-%d', date) >= ? 
-        AND strftime('%Y-%m-%d', date) <= ?
+            SELECT id, date, description, content, scan_paths
+            FROM letters 
+            WHERE date BETWEEN ? AND ?
         """
-        params = [date_min.strftime('%Y-%m-%d'), date_max.strftime('%Y-%m-%d')]
+        params = [start_date, end_date]
         
         if search_query:
             query += " AND (content LIKE ? OR description LIKE ?)"
-            params.extend([f"%{search_query}%", f"%{search_query}%"])
+            search_pattern = f"%{search_query}%"
+            params.extend([search_pattern, search_pattern])
             
         query += " ORDER BY date DESC"
         
-        # Debug information
-        st.sidebar.write("Debug Info:")
-        st.sidebar.write(f"Date range: {date_min.strftime('%Y-%m-%d')} to {date_max.strftime('%Y-%m-%d')}")
+        # Execute query and fetch results
+        df = fetch_letters(query, params)
         
-        # Execute query with timing
-        df = fetch_letters(conn, query, params)
-        
-        # Display results count
-        st.write(f"Found {len(df)} letters")
-        
+        # Display result count
+        result_count = len(df)
+        if search_query:
+            st.write(f"Found {result_count} {'letter' if result_count == 1 else 'letters'} matching '{search_query}'")
+        else:
+            st.write(f"Showing {result_count} {'letter' if result_count == 1 else 'letters'}")
+
+        # Helper function to highlight matching text
+        def highlight_matches(text, search):
+            if not search or not text:
+                return text
+            
+            import re
+            pattern = re.compile(f'({re.escape(search)})', re.IGNORECASE)
+            return pattern.sub(r'**\1**', text)
+
         # Display letters with timing
         for idx, row in df.iterrows():
             expander_key = f"letter_{idx}"
@@ -193,9 +185,13 @@ def main():
             with expander:
                 start_time = time.time()
                 
-                # Display letter content
+                # Display letter content with highlighting
                 st.markdown("### Letter Content")
-                st.write(row['content'])
+                if search_query:
+                    highlighted_content = highlight_matches(row['content'], search_query)
+                    st.markdown(highlighted_content)
+                else:
+                    st.write(row['content'])
                 
                 # Add a button to trigger image loading
                 if not st.session_state[expander_key] and row['scan_paths']:
@@ -212,8 +208,6 @@ def main():
     
     except Exception as e:
         st.error(f"An error occurred: {e}")
-    finally:
-        conn.close()
 
 if __name__ == "__main__":
     main()
