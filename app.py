@@ -8,13 +8,138 @@ import json
 import time
 import functools
 import logging
+import re
 
 # Configure Streamlit page
 st.set_page_config(
     page_title="Family Letters Archive",
-    page_icon="📝",
-    layout="wide"
+    page_icon=None,
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
+
+# Custom CSS for modern interface with vintage letter aesthetic
+st.markdown("""
+    <style>
+    /* Global theme override */
+    .stApp {
+        background-color: #f5f5f0;
+    }
+    
+    /* Header bar removal */
+    header[data-testid="stHeader"] {
+        display: none;
+    }
+    
+    /* Main content area */
+    .main {
+        padding: 2rem;
+        background-color: #f5f5f0;
+        color: #2c2c2c;
+    }
+    
+    /* Sidebar styling */
+    section[data-testid="stSidebar"] {
+        width: 20rem !important;
+        min-width: 20rem !important;
+        background-color: #e8e8e0;
+        border-right: 1px solid #d0d0c8;
+    }
+    
+    section[data-testid="stSidebar"] .block-container {
+        padding-top: 2rem;
+    }
+    
+    /* Input fields styling */
+    .stTextInput input, .stDateInput input {
+        background-color: white !important;
+        border: 1px solid #d0d0c8 !important;
+        border-radius: 4px !important;
+        color: #2c2c2c !important;
+    }
+    
+    /* Button styling */
+    .stButton button {
+        background-color: #f5f5f0 !important;
+        color: #2c2c2c !important;
+        border: 1px solid #d0d0c8 !important;
+        border-radius: 4px !important;
+        font-family: -apple-system, BlinkMacSystemFont, sans-serif !important;
+        transition: all 0.2s ease;
+    }
+    
+    .stButton button:hover {
+        background-color: #e8e8e0 !important;
+        border-color: #b0b0a8 !important;
+    }
+    
+    /* Letter styling */
+    .letter-content {
+        background-color: #fff9f0;
+        padding: 3rem;
+        border-radius: 8px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+        color: #2c2c2c;
+        font-family: "Courier New", Courier, monospace;
+        font-size: 1.1rem;
+        line-height: 1.6;
+        max-width: 100%;
+        margin: 1.5rem 0;
+        border: 1px solid #e0e0d8;
+        white-space: pre-wrap;
+    }
+    
+    /* Letter header styling */
+    .letter-header {
+        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+        color: #2c2c2c;
+        margin-bottom: 2rem;
+        border-bottom: 1px solid #d0d0c8;
+        padding-bottom: 1rem;
+    }
+    
+    .letter-date {
+        color: #666;
+        font-size: 0.9rem;
+        margin-top: 0.5rem;
+    }
+    
+    /* Expander styling */
+    .streamlit-expanderHeader {
+        background-color: #fff !important;
+        border: 1px solid #e0e0d8 !important;
+        border-radius: 8px !important;
+        color: #2c2c2c !important;
+        font-family: -apple-system, BlinkMacSystemFont, sans-serif !important;
+        margin-bottom: 1rem !important;
+        padding: 1rem !important;
+    }
+    
+    /* Override Streamlit's default text colors */
+    .stMarkdown, p, h1, h2, h3 {
+        color: #2c2c2c !important;
+        font-family: -apple-system, BlinkMacSystemFont, sans-serif !important;
+    }
+    
+    /* Style the title */
+    h1 {
+        font-weight: 600 !important;
+        font-size: 2rem !important;
+        margin-bottom: 2rem !important;
+        color: #1a1a1a !important;
+    }
+    
+    /* Remove emoji icons */
+    [data-testid="stSidebarNav"] {
+        display: none;
+    }
+    
+    /* Hide streamlit branding */
+    #MainMenu, footer {
+        display: none !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
 # Add debug mode toggle to sidebar
 debug_mode = st.sidebar.checkbox("Enable Debug Mode", value=False)
@@ -106,13 +231,24 @@ def fetch_letters(query, params):
 
 @timer_decorator
 def main():
+    # Title without emoji
     st.title("Family Letters Archive")
     
-    # Sidebar filters
-    st.sidebar.header("Search and Filter")
+    # Initialize database connection
+    conn = get_db_connection()
+    
+    # Sidebar styling
+    st.sidebar.markdown("""
+        <style>
+        .sidebar .sidebar-content {
+            padding: 2rem 1rem;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+    
+    st.sidebar.title("Search and Filter")
     
     # Get min and max dates from database
-    conn = get_db_connection()
     date_range = pd.read_sql_query(
         "SELECT MIN(date) as min_date, MAX(date) as max_date FROM letters",
         conn
@@ -121,15 +257,13 @@ def main():
     min_date = datetime.strptime(date_range['min_date'], '%Y-%m-%d')
     max_date = datetime.strptime(date_range['max_date'], '%Y-%m-%d')
     
-    # Add search field
+    # Add search field without icon
     search_query = st.sidebar.text_input("Search letters", key="search_input")
 
-    # Date range selection
-    col1, col2 = st.sidebar.columns(2)
-    with col1:
-        start_date = st.sidebar.date_input("Start Date", min_value=min_date, max_value=max_date, value=min_date)
-    with col2:
-        end_date = st.sidebar.date_input("End Date", min_value=min_date, max_value=max_date, value=max_date)
+    # Date range selection with better layout
+    st.sidebar.markdown("### Date Range")
+    start_date = st.sidebar.date_input("From", min_value=min_date, max_value=max_date, value=min_date)
+    end_date = st.sidebar.date_input("To", min_value=min_date, max_value=max_date, value=max_date)
 
     try:
         # Validate date range
@@ -155,12 +289,12 @@ def main():
         # Execute query and fetch results
         df = fetch_letters(query, params)
         
-        # Display result count
+        # Display result count without emoji
         result_count = len(df)
         if search_query:
-            st.write(f"Found {result_count} {'letter' if result_count == 1 else 'letters'} matching '{search_query}'")
+            st.markdown(f"### Found {result_count} {'letter' if result_count == 1 else 'letters'} matching '{search_query}'")
         else:
-            st.write(f"Showing {result_count} {'letter' if result_count == 1 else 'letters'}")
+            st.markdown(f"### Showing {result_count} {'letter' if result_count == 1 else 'letters'}")
 
         # Helper function to highlight matching text
         def highlight_matches(text, search):
@@ -171,31 +305,49 @@ def main():
             pattern = re.compile(f'({re.escape(search)})', re.IGNORECASE)
             return pattern.sub(r'**\1**', text)
 
-        # Display letters with timing
+        # Helper function to clean text content
+        def clean_text_content(text):
+            # Replace special quotes and dashes with standard characters
+            text = text.replace('"', '"').replace('"', '"')
+            text = text.replace(''', "'").replace(''', "'")
+            text = text.replace('–', '-').replace('—', '-')
+            # Fix common OCR issues with spaces
+            text = re.sub(r'(\d+),(\d+)', r'\1,\2', text)  # Fix number formatting
+            text = re.sub(r'([a-zA-Z])(\d)', r'\1 \2', text)  # Add space between letter and number
+            # Remove any non-ASCII characters
+            text = ''.join(char if ord(char) < 128 else ' ' for char in text)
+            # Fix multiple spaces
+            text = re.sub(r'\s+', ' ', text)
+            return text.strip()
+
+        # Display letter content with vintage styling
         for idx, row in df.iterrows():
-            expander_key = f"letter_{idx}"
-            
-            # Initialize expander state if not exists
+            expander_key = f"show_images_{idx}"
             if expander_key not in st.session_state:
                 st.session_state[expander_key] = False
-            
-            # Create expander
-            expander = st.expander(f"{row['date']} - {row['description']}", expanded=False)
+
+            expander = st.expander(row['description'], expanded=True)
             
             with expander:
                 start_time = time.time()
                 
-                # Display letter content with highlighting
-                st.markdown("### Letter Content")
-                if search_query:
-                    highlighted_content = highlight_matches(row['content'], search_query)
-                    st.markdown(highlighted_content)
-                else:
-                    st.write(row['content'])
+                # Clean the content
+                cleaned_content = clean_text_content(row['content'])
                 
-                # Add a button to trigger image loading
+                st.markdown(f"""
+                    <div class="letter-content">
+                        <div style="text-align: right; margin-bottom: 2rem; font-family: 'Courier New', Courier, monospace; color: #444;">
+                            {row['date']}
+                        </div>
+                        <div style="margin-bottom: 2rem; font-family: 'Courier New', Courier, monospace;">
+                            {highlight_matches(cleaned_content, search_query) if search_query else cleaned_content}
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+                # Original Letter button
                 if not st.session_state[expander_key] and row['scan_paths']:
-                    if st.button("Load Images", key=f"load_btn_{idx}"):
+                    if st.button("Original Letter", key=f"load_btn_{idx}"):
                         st.session_state[expander_key] = True
                         st.rerun()
                 
