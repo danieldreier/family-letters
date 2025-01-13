@@ -205,7 +205,6 @@ def main():
                 
                 # Only show images if they've been explicitly loaded
                 if st.session_state[expander_key] and row['scan_paths']:
-                    st.markdown("### Original Scans")
                     display_images(row['scan_paths'])
                 
                 render_time = time.time() - start_time
