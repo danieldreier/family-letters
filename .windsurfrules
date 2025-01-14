@@ -1,0 +1,6 @@
+1. You will mostly develop autonomously
+2. Use a test-driven iterative approach using end to end UI tests. 
+3. Take screenshots of the UI, then view them to understand progress or issues.
+4. Before you commit, run all tests and make sure they pass.
+5. You cannot load images, but can view them by giving me a path of an image to share with you
+6. Always use the venv in venv/bin/pip
