@@ -74,47 +74,55 @@ st.markdown("""
     }
     
     /* Letter styling */
-    .letter-content {
-        background-color: #fff9f0;
-        padding: 3rem;
+    .letter-container {
+        margin-bottom: 1rem;
+    }
+    .letter-preview {
+        background-color: #fdfbf7;
         border-radius: 8px;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.05);
-        color: #2c2c2c;
-        font-family: "Courier New", Courier, monospace;
-        font-size: 1.1rem;
-        line-height: 1.6;
-        max-width: 100%;
-        margin: 1.5rem 0;
-        border: 1px solid #e0e0d8;
-        white-space: pre-wrap;
+        padding: 1.5rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        font-family: 'Courier New', Courier, monospace;
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+        margin: 0;
     }
-    
-    /* Letter header styling */
+    .letter-preview:hover {
+        background-color: #f5f2eb;
+    }
     .letter-header {
-        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-        color: #2c2c2c;
-        margin-bottom: 2rem;
-        border-bottom: 1px solid #d0d0c8;
-        padding-bottom: 1rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0;
     }
-    
+    .letter-title {
+        color: #555;
+        font-size: 1rem;
+        font-family: 'Courier New', Courier, monospace;
+    }
     .letter-date {
-        color: #666;
-        font-size: 0.9rem;
-        margin-top: 0.5rem;
+        color: #444;
+        font-family: 'Courier New', Courier, monospace;
+        margin-left: 2rem;
+        white-space: nowrap;
     }
-    
-    /* Expander styling */
-    .streamlit-expanderHeader {
-        background-color: #fff !important;
-        border: 1px solid #e0e0d8 !important;
-        border-radius: 8px !important;
-        color: #2c2c2c !important;
-        font-family: -apple-system, BlinkMacSystemFont, sans-serif !important;
-        margin-bottom: 1rem !important;
-        padding: 1rem !important;
+    .letter-content {
+        background-color: #fdfbf7;
+        border-radius: 8px;
+        padding: 0.5rem;
+        font-family: 'Courier New', Courier, monospace;
     }
-    
+    div[data-testid="stExpander"] {
+        border: none !important;
+        box-shadow: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    div[data-testid="element-container"] {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
     /* Override Streamlit's default text colors */
     .stMarkdown, p, h1, h2, h3 {
         color: #2c2c2c !important;
@@ -316,47 +324,86 @@ def main():
             text = re.sub(r'([a-zA-Z])(\d)', r'\1 \2', text)  # Add space between letter and number
             # Remove any non-ASCII characters
             text = ''.join(char if ord(char) < 128 else ' ' for char in text)
-            # Fix multiple spaces
-            text = re.sub(r'\s+', ' ', text)
+            
+            # Convert multiple newlines to a single newline
+            text = re.sub(r'\n\s*\n', '\n\n', text)
+            
+            # Fix multiple spaces (but preserve newlines)
+            text = re.sub(r'[^\S\n]+', ' ', text)
+            
             return text.strip()
 
-        # Display letter content with vintage styling
+        # Add custom CSS for letter styling
+        st.markdown("""
+            <style>
+            .stButton > button {
+                width: 100%;
+                text-align: left;
+                background-color: #fdfbf7 !important;
+                border: none !important;
+                border-radius: 8px !important;
+                padding: 1.5rem !important;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+                margin-bottom: 0 !important;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+                display: flex !important;
+                justify-content: space-between !important;
+                align-items: center !important;
+                color: #555 !important;
+            }
+            .letter-content {
+                background-color: #fdfbf7;
+                padding: 1.5rem;
+                border-radius: 8px;
+                font-family: "Courier New", Courier, monospace;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                margin-top: 0.5rem;
+                line-height: 1.6;
+                white-space: normal;
+            }
+            .letter-content p {
+                margin-bottom: 1.5em;
+            }
+            </style>
+        """, unsafe_allow_html=True)
+
         for idx, row in df.iterrows():
             expander_key = f"show_images_{idx}"
             if expander_key not in st.session_state:
                 st.session_state[expander_key] = False
 
-            expander = st.expander(row['description'], expanded=True)
+            st.markdown('<div class="letter-container">', unsafe_allow_html=True)
             
-            with expander:
-                start_time = time.time()
-                
+            # Create a button with description and date
+            button_text = f"{row['description']}          {row['date']}"
+            
+            if st.button(
+                button_text,
+                key=f"preview_btn_{idx}",
+                use_container_width=True,
+                type="secondary"
+            ):
+                st.session_state[f"expander_{idx}"] = not st.session_state.get(f"expander_{idx}", False)
+                st.rerun()
+
+            # Show content if expanded
+            if st.session_state.get(f"expander_{idx}", False):
                 # Clean the content
                 cleaned_content = clean_text_content(row['content'])
+                # Replace newlines with paragraph breaks
+                formatted_content = cleaned_content.replace('\n\n', '</p><p>')
+                formatted_content = f'<p>{formatted_content}</p>'
                 
                 st.markdown(f"""
                     <div class="letter-content">
-                        <div style="text-align: right; margin-bottom: 2rem; font-family: 'Courier New', Courier, monospace; color: #444;">
-                            {row['date']}
-                        </div>
-                        <div style="margin-bottom: 2rem; font-family: 'Courier New', Courier, monospace;">
-                            {highlight_matches(cleaned_content, search_query) if search_query else cleaned_content}
-                        </div>
+                        {formatted_content}
                     </div>
                 """, unsafe_allow_html=True)
-                
-                # Original Letter button
-                if not st.session_state[expander_key] and row['scan_paths']:
-                    if st.button("Original Letter", key=f"load_btn_{idx}"):
-                        st.session_state[expander_key] = True
-                        st.rerun()
-                
-                # Only show images if they've been explicitly loaded
-                if st.session_state[expander_key] and row['scan_paths']:
+
+                # Display original letter images if available
+                if row['scan_paths']:
+                    st.write("Original Letter:")
                     display_images(row['scan_paths'])
-                
-                render_time = time.time() - start_time
-                log_timing(f"Rendering letter {idx} took {render_time:.2f} seconds")
     
     except Exception as e:
         st.error(f"An error occurred: {e}")
