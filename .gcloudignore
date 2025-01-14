@@ -1,0 +1,21 @@
+# Exclude git and IDE files
+.git
+.gitignore
+.vscode/
+*.swp
+*.swo
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv
+.env
+
+# Dataset directory (will be in GCS)
+dataset/
+
+# Do NOT exclude the database
+# *.db

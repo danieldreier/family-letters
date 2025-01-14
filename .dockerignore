@@ -1,0 +1,23 @@
+# Version control
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv
+.env
+
+# Dataset directory (will be in GCS)
+dataset/
+
+# IDE
+.vscode/
+*.swp
+*.swo
+
+# Local development
+*.log

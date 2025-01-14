@@ -9,6 +9,8 @@ import time
 import functools
 import logging
 import re
+from google.cloud import storage
+from io import BytesIO
 
 # Configure Streamlit page
 st.set_page_config(
@@ -181,29 +183,38 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
-def get_cached_image(path):
-    """Get image from cache or load it"""
-    # Initialize image cache in session state if it doesn't exist
+def get_image_from_gcs(bucket_name, blob_path):
+    """Get image from Google Cloud Storage"""
     if 'image_cache' not in st.session_state:
         st.session_state.image_cache = {}
     
-    if path not in st.session_state.image_cache:
+    cache_key = f"{bucket_name}/{blob_path}"
+    
+    if cache_key not in st.session_state.image_cache:
         start_time = time.time()
         try:
-            if not os.path.exists(path):
-                st.error(f"Image file not found: {path}")
-                return None
-            image = Image.open(path)
+            storage_client = storage.Client()
+            bucket = storage_client.bucket(bucket_name)
+            blob = bucket.blob(blob_path)
+            
+            # Download the image into memory
+            image_data = BytesIO()
+            blob.download_to_file(image_data)
+            image_data.seek(0)
+            
+            # Open the image using PIL
+            image = Image.open(image_data)
+            
             load_time = time.time() - start_time
-            log_timing(f"Loading and caching image {os.path.basename(path)} took {load_time:.2f} seconds")
-            st.session_state.image_cache[path] = image
+            log_timing(f"Loading and caching image {blob_path} took {load_time:.2f} seconds")
+            st.session_state.image_cache[cache_key] = image
         except Exception as e:
-            st.error(f"Could not load scan: {path}\nError: {str(e)}")
+            st.error(f"Could not load scan from GCS: {blob_path}\nError: {str(e)}")
             return None
     else:
-        log_timing(f"Retrieved image {os.path.basename(path)} from cache")
+        log_timing(f"Retrieved image {blob_path} from cache")
     
-    return st.session_state.image_cache[path]
+    return st.session_state.image_cache[cache_key]
 
 @timer_decorator
 def display_images(scan_paths_str):
@@ -217,25 +228,20 @@ def display_images(scan_paths_str):
         if scan_paths:
             st.markdown("### Original Scans")
             cols = st.columns(min(len(scan_paths), 2))
+            
+            # Get bucket name from environment variable
+            bucket_name = os.getenv('GCS_BUCKET_NAME')
+            
             for idx, scan_path in enumerate(scan_paths):
                 col = cols[idx % 2]
                 with col:
-                    image = get_cached_image(scan_path)
+                    # Convert local path to GCS path (remove leading 'dataset/' if present)
+                    gcs_path = scan_path.replace('dataset/', '')
+                    image = get_image_from_gcs(bucket_name, gcs_path)
                     if image:
                         st.image(image, caption=os.path.basename(scan_path), use_container_width=True)
     except Exception as e:
         st.error(f"Error loading images: {e}")
-
-@timer_decorator
-def fetch_letters(query, params):
-    """Fetch letters from database with timing"""
-    start_time = time.time()
-    conn = get_db_connection()
-    df = pd.read_sql_query(query, conn, params=params)
-    query_time = time.time() - start_time
-    log_timing(f"SQL Query took {query_time:.2f} seconds, returned {len(df)} rows")
-    conn.close()
-    return df
 
 def check_password():
     """Returns `True` if the user had the correct password."""
@@ -322,7 +328,7 @@ def main():
         query += " ORDER BY date DESC"
         
         # Execute query and fetch results
-        df = fetch_letters(query, params)
+        df = pd.read_sql_query(query, conn, params=params)
         
         # Display result count without emoji
         result_count = len(df)
