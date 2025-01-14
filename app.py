@@ -336,10 +336,12 @@ def main():
         # Add custom CSS for letter styling
         st.markdown("""
             <style>
+            @import url('https://fonts.googleapis.com/css2?family=Special+Elite&display=swap');
+            
             .stButton > button {
                 width: 100%;
                 text-align: left;
-                background-color: #fdfbf7 !important;
+                background-color: #faf6e9 !important;
                 border: none !important;
                 border-radius: 8px !important;
                 padding: 1.5rem !important;
@@ -352,14 +354,17 @@ def main():
                 color: #555 !important;
             }
             .letter-content {
-                background-color: #fdfbf7;
+                background-color: #faf6e9;
                 padding: 1.5rem;
                 border-radius: 8px;
-                font-family: "Courier New", Courier, monospace;
+                font-family: "American Typewriter", "Special Elite", "Courier New", Courier, monospace;
                 box-shadow: 0 2px 4px rgba(0,0,0,0.1);
                 margin-top: 0.5rem;
                 line-height: 1.6;
                 white-space: normal;
+                font-size: 1rem;
+                color: #222;
+                letter-spacing: 0.5px;
             }
             .letter-content p {
                 margin-bottom: 1.5em;
